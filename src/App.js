@@ -1,38 +1,39 @@
+//Core
 import React, { Component } from "react";
 import * as THREE from "three";
+
+//Animation
 const OrbitControls = require("three-orbit-controls")(THREE);
 
-function neoviusPositive(u, v, target) {
-  const { PI, acos, cos } = Math;
+//Geometry
 
-  u = u * PI - PI / 2;
-  v = v * PI + PI / 2;
+///Sorry but i changed my figure, because me look like bull****
+// so i make desition to took new variant of lab, i really hope , you will understand me
+const astroidalTorus = (u, v, target) => {
+  const { PI, cos, pow, sin } = Math;
 
-  const x = u;
-  const y = v;
+  v = v * 2 * PI;
+  u = u * 2 * PI - PI;
 
-  const cosU = cos(u);
+  //Constant
+  const A = 1;
+  const R = 2;
+  const Q = 0.25 * PI;
+
+  const fx = A * pow(cos(u), 3);
+  const fz = A * pow(sin(u), 3);
+
+  const cosQ = cos(Q);
+  const sinQ = cos(Q);
   const cosV = cos(v);
+  const sinV = sin(v);
 
-  const z = acos(-3 * ((cosV + cosU) / (3 + 4 * cosU * cosV)));
+  const x = (R + fx * cosQ - fz * sinQ) * cosV;
+  const y = (R + fx * cosQ - fz * sinQ) * sinV;
+  const z = fx * sinQ + fz * cosQ;
+
   target.set(x, y, z);
-}
-
-function neoviusNegative(u, v, target) {
-  const { PI, acos, cos } = Math;
-
-  u = u * PI - PI / 2;
-  v = v * PI + PI / 2;
-
-  const x = u;
-  const y = v;
-
-  const cosU = cos(u);
-  const cosV = cos(v);
-
-  const z = acos(-3 * ((cosV + cosU) / (3 + 4 * cosU * cosV)));
-  target.set(x, y, -z + 10);
-}
+};
 
 class Shape extends Component {
   constructor(props) {
@@ -54,118 +55,29 @@ class Shape extends Component {
     this.initializeOrbits();
     this.initializeCamera();
 
-    var geometryPositive = new THREE.ParametricGeometry(
-      neoviusPositive,
-      25,
-      25
-    );
-    var geometryNegative = new THREE.ParametricGeometry(
-      neoviusNegative,
-      25,
-      25
-    );
+    const geometry = new THREE.ParametricGeometry(astroidalTorus, 25, 25);
 
-    // mesh
-    var material = new THREE.MeshPhongMaterial({
-      color: 0xff0000,
-      polygonOffset: true,
-      polygonOffsetFactor: 1, // positive value pushes polygon further away
-      polygonOffsetUnits: 1
+    const meshMaterial = new THREE.MeshPhongMaterial({
+      color: 0x156289,
+      emissive: new THREE.Color("#990F02"),
+      side: THREE.DoubleSide,
+      flatShading: true
+    });
+    const meshPositive = new THREE.Mesh(geometry, meshMaterial);
+
+    const geo = new THREE.WireframeGeometry(meshPositive.geometry);
+
+    const mat = new THREE.LineBasicMaterial({
+      color: new THREE.Color("#000000"),
+      transparent: true,
+      opacity: 0.8
     });
 
-    var uniforms = THREE.UniformsUtils.merge([
-      THREE.UniformsLib["ambient"],
-      THREE.UniformsLib["lights"],
-      {
-        myColour: { value: new THREE.Vector4(0, 0, 1, 1) },
-        delta: { value: 0 }
-      }
-    ]);
-    var shaderMaterial = new THREE.ShaderMaterial({
-      uniforms: uniforms,
-
-      vertexShader: `	varying vec3 vViewPosition; //VertexPos
-      varying vec3 vNormal;
-    
-      attribute float vertexDisplacement;
-        uniform float delta;
-        varying float vOpacity;
-         varying vec3 vUv;
-    
-      void main() {
-          vec3 transformed = vec3( position );
-          vec4 mvPosition = modelViewMatrix * vec4( transformed, 1.0 ); //Eye-coordinate position
-          vViewPosition = - mvPosition.xyz;
-    
-        vUv = position;
-          vOpacity = vertexDisplacement;
-    
-          vec3 p = position;
-          p.x += sin(p.y + delta );
-    
-            vNormal = normalMatrix * normal;
-            gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.0);
-       }`,
-
-      fragmentShader: `uniform vec4 myColour;
-      varying vec3 vViewPosition; //Translation component of view matrix
-      varying vec3 vNormal;
-  
-      uniform float delta;
-        varying float vOpacity;
-        varying vec3 vUv;
-  
-  
-    struct PointLight {
-      vec3 position;
-      vec3 color;
-      float distance;
-      float decay;
-  
-      int shadow;
-      float shadowBias;
-      float shadowRadius;
-      vec2 shadowMapSize;
-      float shadowCameraNear;
-      float shadowCameraFar;
-    };
-  
-     uniform PointLight pointLights[ NUM_POINT_LIGHTS ];
-  
-      void main() {
-  
-        vec3 mvPosition = -vViewPosition; //Eye coordinate space
-  
-        vec4 addedLights = vec4(0.1, 0.1, 0.1, 1.0);
-        for(int l = 0; l < NUM_POINT_LIGHTS; l++) {
-          vec3 lightDirection = normalize(pointLights[l].position -  mvPosition   );
-          addedLights.rgb += clamp(dot(lightDirection, vNormal), 0.0, 1.0) * pointLights[l].color;
-        }
-        gl_FragColor = myColour * addedLights;//mix(vec4(diffuse.x, diffuse.y, diffuse.z, 1.0), addedLights, addedLights);
-      }`
-    });
-
-    var meshPositive = new THREE.Mesh(geometryPositive, shaderMaterial);
-    var meshNegative = new THREE.Mesh(geometryNegative, material);
-
-    // wireframe
-    var geo = new THREE.WireframeGeometry(meshPositive.geometry);
-    var keo = new THREE.WireframeGeometry(meshNegative.geometry);
-
-    var mat = new THREE.LineBasicMaterial({
-      color: 0xffffff,
-      linewidth: 2
-    });
-
-    var wireframe = new THREE.LineSegments(geo, mat);
-
-    var wireframeKek = new THREE.LineSegments(keo, mat);
+    const wireframe = new THREE.LineSegments(geo, mat);
 
     meshPositive.add(wireframe);
-    meshNegative.add(wireframeKek);
 
     this.scene.add(meshPositive);
-    this.scene.add(meshNegative);
 
     this.animate();
   }
@@ -195,11 +107,13 @@ class Shape extends Component {
       <div>
         <div
           id="boardCanvas"
+          width={800}
+          height={800}
           style={{ width: "80vw", height: "40vw" }}
           ref={mount => {
             this.mount = mount;
           }}
-        />
+        ></div>
       </div>
     );
   }
